@@ -1,0 +1,142 @@
+<?php namespace ProcessWire;
+
+use Kunnu\Dropbox\Dropbox;
+use Kunnu\Dropbox\DropboxApp;
+use Kunnu\Dropbox\DropboxFile;
+
+class InputfieldDropbox extends InputfieldTextarea implements ConfigurableModule{
+    static public function getModuleInfo(){
+
+        return array(
+            'title' => 'Dropbox inputfield',
+            'author' => 'Ben Byford',
+            'version' => '0.0.1',
+            'summary' => 'Dropbox inputfield for textarea.',
+            'url' => 'http://www.benbyford.com',
+            'singular' => true,
+            'autoload' => true
+        );
+    }
+
+    public function renderReady(Inputfield $parent = null, $renderValueMode = false) {
+		$class = $this->className();
+		$info = self::getModuleInfo();
+		$ver = $info['version'];
+
+		$this->config->scripts->add($this->config->urls->$class . "js/dropbox-input.jquery.min.js?v=$ver");
+		$this->config->styles->add($this->config->urls->$class . "css/dropbox-input.css?v=$ver");
+
+		return parent::renderReady($parent, $renderValueMode);
+    }
+
+    /*
+    * Process the value before it is saved to the database
+    */
+    public function ___render() {
+
+        $attrs = $this->getAttributes();
+        $value = $attrs['value'];
+
+        /*
+         * dropbox start
+         */
+
+         // render dropbox folder select
+         $drop = $this->modules->get('DropboxAPI');
+
+         //Configure Dropbox Application
+         $app = new DropboxApp($drop->app_key, $drop->app_secret, $drop->authorization_code);
+         //Configure Dropbox service
+         $dropbox = new Dropbox($app);
+
+         $folder_path = "/";
+
+         // get items from dropbox folder
+         try {
+             $listFolderContents = $dropbox->listFolder($folder_path); //root folder is the folder you nominated in the Dropbox App config. Refer doco
+         } catch (\Exception $e) {
+             $out = 'Folder does not exist or has moved, please contact Fabrix Capital to supply the folder location.';
+         }
+
+         if($listFolderContents){
+
+             // if folder found get them
+             $items = $listFolderContents->getItems();
+
+             $out = "<select id='dropbox_select' name='dropbox_folder_textarea'>";
+             // add bottom level folder
+             $out .= "<option value='/'>/</option>";
+             function listItems($items, $dropbox, $depth = "0", $value = ""){
+
+                 ++$depth;
+
+                 foreach ($items as $item){
+
+                     // get file name
+                     $name = $item->getName();
+
+                     // getPathLower
+                     $path = $item->getpathLower();
+                     $displayName = $item->getPathDisplay();
+                     $htmlSafePath = htmlentities($displayName, ENT_QUOTES);
+                     $thumbHasExt = strpos($path, '.');
+
+                     // folder
+                     if(!$thumbHasExt){
+
+                         $optionName = strtolower(trim($htmlSafePath));
+
+                         $selected = "";
+                         if(strcmp($displayName, $value) == 0) $selected = "selected";
+
+                         $out .= "<option {$selected} value='{$htmlSafePath}'>";
+                         for ($i=0; $i < $depth; $i++) {
+                            $out .= '- ';
+                         }
+                         $out .= "$name";
+                         $out .= "</option>";
+
+                         // iterate over this folder
+                         $listSubFolderContents = $dropbox->listFolder($path);
+                         $items = $listSubFolderContents->getItems();
+
+                         // get list of files in subfolder
+                         $out .= listItems($items, $dropbox, $depth, $value);
+                     }
+                 }
+                 return $out;
+            }
+
+            // get depth 0 folder items
+            $out .= listItems($items, $dropbox, $depth, $value);
+            $out .= "</select>";
+        }
+
+        $return = "\n<input " . $this->getAttributesString() . " disabled />";
+        $return .= $out;
+        return $return;
+    }
+
+    /*
+    * Process the value before it is saved to the database
+    */
+    public function ___processInput(WireInputData $input) {
+		parent::___processInput($input);
+		// use $this->value to access the field value and editing it
+		return $this;
+    }
+
+    /*
+     * remove config fields that are not applicable to the dropbox inputfield for textarea
+     */
+    public function ___getConfigInputfields() {
+		$inputfields = parent::___getConfigInputfields();
+        $inputfields->remove($inputfields->getChildByName('pattern'));
+        $inputfields->remove($inputfields->getChildByName('placeholder'));
+        $inputfields->remove($inputfields->getChildByName('rows'));
+        $inputfields->remove($inputfields->getChildByName('counter'));
+        $inputfields->remove($inputfields->getChildByName('stripTags'));
+
+		return $inputfields;
+	}
+}

@@ -14,7 +14,8 @@ class InputfieldDropbox extends InputfieldTextarea implements ConfigurableModule
             'summary' => 'Dropbox inputfield for textarea.',
             'url' => 'http://www.benbyford.com',
             'singular' => true,
-            'autoload' => true
+            'autoload' => true,
+            'requires' => 'DropboxAPI'
         );
     }
 
